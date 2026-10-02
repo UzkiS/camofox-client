@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    if: github.ref == 'refs/heads/main'
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+      - uses: actions/checkout@v4
+        if: steps.release.outputs.release_created == 'true'
+        with:
+          ref: ${{ steps.release.outputs.tag_name }}
+      - uses: actions/setup-python@v5
+        if: steps.release.outputs.release_created == 'true'
+        with:
+          python-version: '3.14'
+      - name: Build skill archive
+        if: steps.release.outputs.release_created == 'true'
+        run: python scripts/build_release.py
+      - name: Attach archive and checksum
+        if: steps.release.outputs.release_created == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag_name }}
+        run: gh release upload "$RELEASE_TAG" dist/*.zip dist/*.sha256 --clobber
