@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -131,6 +132,39 @@ class CliTests(unittest.TestCase):
                 code, _ = self.invoke(['--user-id', 'a', 'create', '--output', str(Path(directory) / 'result.json')])
                 self.assertEqual(code, 1)
         self.transport.send.assert_not_called()
+
+    @unittest.skipIf(os.name == 'nt', 'Windows does not expose POSIX file permissions')
+    def test_new_output_permissions_follow_umask(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'result.json'
+            for mask, expected in ((0o022, 0o644), (0o027, 0o640)):
+                with self.subTest(umask=oct(mask)):
+                    previous = os.umask(mask)
+                    try:
+                        main.write_output(path, b'{}')
+                        self.assertEqual(os.umask(mask), mask)
+                    finally:
+                        os.umask(previous)
+                    self.assertEqual(stat.S_IMODE(path.stat().st_mode), expected)
+                    self.assertEqual(path.read_bytes(), b'{}')
+                    self.assertEqual(list(Path(directory).iterdir()), [path])
+                    path.unlink()
+
+    @unittest.skipIf(os.name == 'nt', 'Windows does not expose POSIX file permissions')
+    def test_overwritten_output_preserves_existing_permissions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'image.png'
+            path.write_bytes(b'original')
+            path.chmod(0o664)
+            previous = os.umask(0o077)
+            try:
+                main.write_output(path, b'PNG-test')
+                self.assertEqual(os.umask(0o077), 0o077)
+            finally:
+                os.umask(previous)
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o664)
+            self.assertEqual(path.read_bytes(), b'PNG-test')
+            self.assertEqual(list(Path(directory).iterdir()), [path])
 
     def test_save_failure_preserves_create_result_and_existing_file(self):
         self.transport.send.return_value = Response(200, 'application/json', b'{"tabId":"created-tab"}')

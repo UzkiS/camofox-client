@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
 import sys
 import tempfile
 from actions import ACTIONS, COMPOSITE
@@ -161,6 +162,13 @@ def write_output(path, content):
         with tempfile.NamedTemporaryFile(dir=path.parent, prefix='.camofox-', suffix='.tmp', delete=False) as stream:
             temporary = Path(stream.name)
             stream.write(content)
+        try:
+            mode = stat.S_IMODE(path.stat().st_mode)
+        except FileNotFoundError:
+            mask = os.umask(0)
+            os.umask(mask)
+            mode = 0o666 & ~mask
+        temporary.chmod(mode)
         os.replace(temporary, path)
     finally:
         if temporary is not None:
