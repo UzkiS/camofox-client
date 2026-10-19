@@ -1,16 +1,16 @@
 # Camofox Client
 
-**让 agent 在同一个工作流中显式切换 `userId`，交替使用不同的浏览器用户上下文。**
+让 agent 在同一个工作流中显式切换 `userId`，交替使用不同的浏览器用户上下文。
 
 一些 agent 接入的 Camofox 工具把用户身份固定在工具配置里，单次调用无法灵活更换 `userId`。这会让“用账号 A 查看，再用账号 B 操作，最后回到 A 确认”变得困难。本 skill 通过 Python 直接调用 Camofox REST 服务，每次 CLI 调用显式指定身份，或在同一 Python 进程中使用多个独立的 `Client`。
 
 没有隐藏的“当前 profile”，不必修改宿主工具配置，也不依赖某一种 agent。页面读取、点击后观察、截图和自定义 REST 请求是辅助能力。
 
-> 本客户端负责传递身份，实际 profile、cookie、登录态隔离与权限校验由 Camofox 服务端提供。`sessionKey` 只是同一用户内的标签分组，不是另一个 profile。不要把 `userId` 当作访问控制凭据，也不要混用不同身份的 `tabId`。
+> 客户端传递身份，profile、cookie、登录态隔离与权限校验由服务端提供。`userId` 不是访问控制凭据，`tabId` 必须与其身份配对；`sessionKey` 只是用户内的标签分组，不代表独立 profile。
 
 ## 环境要求
 
-- Python **3.10+**，客户端运行时**零第三方依赖**；也可通过 [uv](https://docs.astral.sh/uv/) 运行。
+- Python 3.10+，客户端运行时零第三方依赖；也可通过 [uv](https://docs.astral.sh/uv/) 运行。
 - 已运行且可访问的 [camofox-browser](https://github.com/jo-inc/camofox-browser) REST 服务，以及使用该服务所需的授权。
 - 可选：Node.js/npm，用于 `npx skills` 安装；手动安装和运行客户端不需要 Node.js。
 
@@ -34,7 +34,7 @@ npx skills add UzkiS/camofox-client --skill camofox-client --agent claude-code -
 npx skills add UzkiS/camofox-client --skill camofox-client --agent claude-code --global --copy
 ```
 
-本地源码同样可以安装：在**目标项目**中运行，把路径替换为此仓库的绝对路径，不要在源码目录里维护另一份安装副本。
+本地源码同样可以安装：在目标项目中运行，把路径替换为此仓库的绝对路径，不要在源码目录里维护另一份安装副本。
 
 ```sh
 npx skills add /absolute/path/to/camofox-client --list
@@ -52,13 +52,15 @@ Windows 路径示例：`"C:/path/to/camofox-client"`。`--copy` 不要求符号�
 | 宿主        | 项目级目录                       | 用户级目录                         |
 | ----------- | -------------------------------- | ---------------------------------- |
 | Claude Code | `.claude/skills/camofox-client/` | `~/.claude/skills/camofox-client/` |
-| Codex       | `.agents/skills/camofox-client/` | `~/.codex/skills/camofox-client/`  |
+| Codex       | `.agents/skills/camofox-client/` | `$HOME/.agents/skills/camofox-client/` |
+
+Codex 的安装位置见 [OpenAI 官方文档](https://learn.chatgpt.com/docs/build-skills)。
 
 其他支持 Agent Skills 的宿主按其文档选择目录。不要只复制 `SKILL.md`。目标存在时先比较、备份，再明确替换；更新时移除旧安装中不再需要的文件。安装后按宿主要求重新加载技能，可以请求：“使用 camofox-client，分别以 userId A 和 B 查看各自的标签页”。
 
 ## 快速开始：同流程切换身份
 
-以下命令在**本仓库根目录**执行。安装后的用户应将脚本路径换为**实际安装目录的绝对路径**，不需要切换工作目录。
+以下命令在本仓库根目录执行。安装后的用户应将脚本路径换为实际安装目录的绝对路径，不需要切换工作目录。
 
 先确认服务可连接：
 
@@ -93,17 +95,17 @@ Python 多 Client 编排、点击后观察和自定义请求见 [接口与配置
 
 ## 配置
 
-可以直接设置规范的 `CAMOFOX_*` 环境变量，或将 [.env.example](.env.example) 复制为本地 `.env`，再**显式**指定：
+可以直接设置规范的 `CAMOFOX_*` 环境变量，或将 [.env.example](.env.example) 复制为本地 `.env`，再显式指定：
 
 ```sh
 python skills/camofox-client/scripts/main.py --env-file .env --user-id profile-b tabs
 ```
 
 - 优先级：显式 CLI/Python 配置 > 环境变量 > 指定的 `.env` > `Config` 默认值。
-- 不搜索当前目录的 `.env`，不读取宿主配置，只接受规范的 `CAMOFOX_*` 配置项。
+- 只接受规范的 `CAMOFOX_*` 配置项；`.env` 需通过 `--env-file` 指定，当前目录的 `.env` 和宿主配置均不会自动加载。
 - `CAMOFOX_USER_ID` 默认留空：不设默认身份，访问用户资源时必须显式传 `--user-id`。多个 profile 平等使用时建议保持为空；单一常用身份可在本地配置默认值。
 - `Config(...)` 本身不读环境；Python 如需加载环境或文件，应显式使用 `load_config`。
-- 密钥通过环境、显式配置文件或 Python Config 传入，不放进命令行参数；不要提交真实 `.env`。
+- 密钥通过环境、显式配置文件或 Python Config 传入，命令行参数不接受密钥；真实 `.env` 仅保留在本地。
 - 全局选项在动作之前；动作参数在动作之后。
 
 ## 失败处理

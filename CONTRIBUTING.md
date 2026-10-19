@@ -45,7 +45,7 @@ uv run --no-project --python .venv python -m unittest discover -s tests -v
 
 测试使用 fake transport、fake clock 或回环 HTTP 服务，不读取真实 `.env`、浏览器凭据或外部服务。分发测试会复制/解压 skill 到包含中文和空格的路径，从不同工作目录执行。
 
-结构测试覆盖本仓库约束，不等同于完整的官方规范认证；可额外使用 [skills-ref](https://github.com/agentskills/agentskills/tree/main/skills-ref) 验证 Agent Skills 格式。
+可使用 [skills-ref](https://github.com/agentskills/agentskills/tree/main/skills-ref) 验证 Agent Skills 格式。
 
 ## 提交与 PR
 
@@ -84,6 +84,8 @@ python scripts/build_release.py
 ```
 
 输出为 `dist/camofox-client-vX.Y.Z.zip` 和同名 `.zip.sha256`。压缩包只有 `camofox-client/`，携带 SKILL.md、Python 脚本、参考文档、LICENSE 和版本。构建按明确文件范围收集内容，不包含 `.env`、缓存或开发依赖；已有同名产物时拒绝覆盖，可指定新的 `--output-dir`。
+
+ZIP 成员统一使用 UTC 时间，依次选择可用的 `SOURCE_DATE_EPOCH`、Git 最新提交时间和固定的 2000-01-01；超出 ZIP 日期范围的值视为不可用。ZIP 在内存中构建完成后写出，再写 SHA-256；写入失败时清理本次创建的产物。
 
 发布前确认：
 
