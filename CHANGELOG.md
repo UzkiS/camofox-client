@@ -2,6 +2,13 @@
 
 版本记录由 release-please 根据 Conventional Commits 自动生成。
 
+## [0.1.1](https://github.com/UzkiS/camofox-client/compare/v0.1.0...v0.1.1) (2026-10-19)
+
+
+### Bug Fixes
+
+* preserve output permissions and make release builds resilient ([4408e91](https://github.com/UzkiS/camofox-client/commit/4408e910e1d959640a56b884dcb46547e556ef22))
+
 ## 0.1.0 (2026-10-02)
 
 
